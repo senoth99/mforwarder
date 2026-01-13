@@ -1,17 +1,15 @@
 # Mail Forwarder to Telegram
 
-Это приложение регулярно проверяет несколько почтовых ящиков по IMAP и пересылает новые (UNSEEN) письма в Telegram через вашего бота. Запускать нужно через `main.py`, все секреты передаются через переменные окружения.
+Это приложение регулярно проверяет один почтовый ящик по IMAP и пересылает новые (UNSEEN) письма в Telegram через вашего бота. Запускать нужно через `main.py`, все секреты передаются через переменные окружения.
 
 ## Переменные окружения (секреты)
 
-- `MAILBOXES_JSON` — JSON-массив ящиков. Каждый элемент:
-  - `name` — имя ящика для отображения.
-  - `host` — IMAP-хост.
-  - `username` — логин.
-  - `password` — пароль.
-  - `port` — порт (по умолчанию 993).
-  - `mailbox` — папка (по умолчанию `INBOX`).
-  - `use_ssl` — использовать SSL (по умолчанию `true`).
+- `IMAP_HOST` — IMAP-хост.
+- `IMAP_USERNAME` — логин (обычно полный email).
+- `IMAP_PASSWORD` — пароль (часто это app password/пароль приложения).
+- `IMAP_PORT` — порт (по умолчанию 993).
+- `IMAP_MAILBOX` — папка (по умолчанию `INBOX`).
+- `IMAP_USE_SSL` — использовать SSL (по умолчанию `true`).
 - `TELEGRAM_BOT_TOKEN` — токен бота.
 - `TELEGRAM_CHAT_ID` — ID чата, куда слать сообщения.
 - `POLL_INTERVAL` — интервал проверки в секундах (по умолчанию 60).
@@ -20,19 +18,22 @@
 ## Пример запуска
 
 ```bash
-export MAILBOXES_JSON='[
-  {
-    "name": "Work",
-    "host": "imap.example.com",
-    "username": "work@example.com",
-    "password": "super-secret",
-    "port": 993,
-    "mailbox": "INBOX",
-    "use_ssl": true
-  }
-]'
+export IMAP_HOST="imap.example.com"
+export IMAP_USERNAME="inbox@example.com"
+export IMAP_PASSWORD="super-secret"
+export IMAP_PORT="993"
+export IMAP_MAILBOX="INBOX"
+export IMAP_USE_SSL="true"
+
 export TELEGRAM_BOT_TOKEN="123456:ABCDEF"
 export TELEGRAM_CHAT_ID="123456789"
 
 python main.py
 ```
+
+## Как привязать почту
+
+1. Узнайте IMAP-адрес и порт у вашего почтового провайдера (например, `imap.gmail.com`, `imap.yandex.ru`).
+2. Создайте пароль приложения (app password), если почтовый сервис требует отдельный пароль для IMAP.
+3. Заполните переменные `IMAP_HOST`, `IMAP_USERNAME`, `IMAP_PASSWORD` и при необходимости `IMAP_PORT`.
+4. Запустите `python main.py`. В Telegram будут приходить сообщения с полем `From`, где указана почта отправителя.
