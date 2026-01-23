@@ -9,6 +9,7 @@ from email.header import decode_header
 from typing import Iterable
 import urllib.request
 import urllib.parse
+import urllib.error
 
 
 @dataclass
@@ -133,7 +134,15 @@ def _is_site_available(url: str, timeout: int = 10) -> bool:
     request = urllib.request.Request(url, method="HEAD")
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            return response.status < 400
+            return response.status < 500
+    except urllib.error.HTTPError as exc:
+        if exc.code == 405:
+            try:
+                with urllib.request.urlopen(url, timeout=timeout) as response:
+                    return response.status < 500
+            except Exception:
+                return False
+        return True
     except Exception:
         return False
 
