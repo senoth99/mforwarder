@@ -35,6 +35,10 @@ class AppConfig:
 
 
 LOGGER = logging.getLogger("mforwarder")
+SITE_CHECK_URL = "https://cashercollection.com"
+SITE_CHECK_INTERVAL = 600
+SITE_DOWN_MESSAGE = "САЙТ НЕДОСТУПЕН @ivanvoropaeff @makstut1"
+SITE_UP_MESSAGE = "САЙТ СНОВА РАБОТАЕТ @ivanvoropaeff @makstut1"
 
 
 def _require_env(name: str) -> str:
@@ -125,6 +129,15 @@ def _send_telegram_message(telegram: TelegramConfig, text: str) -> None:
             raise RuntimeError(f"Telegram API returned status {response.status}")
 
 
+def _is_site_available(url: str, timeout: int = 10) -> bool:
+    request = urllib.request.Request(url, method="HEAD")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.status < 400
+    except Exception:
+        return False
+
+
 def _connect_mailbox(config: MailboxConfig):
     if config.use_ssl:
         context = ssl.create_default_context()
@@ -166,6 +179,8 @@ def process_mailbox(config: MailboxConfig, telegram: TelegramConfig) -> int:
 
 
 def run_loop(config: AppConfig) -> None:
+    last_site_check = 0.0
+    last_site_available: bool | None = None
     while True:
         try:
             total = process_mailbox(config.mailbox, config.telegram)
@@ -173,6 +188,24 @@ def run_loop(config: AppConfig) -> None:
             LOGGER.exception("Failed to process mailbox")
             total = 0
         LOGGER.info("Processed %s new messages", total)
+        now = time.monotonic()
+        if now - last_site_check >= SITE_CHECK_INTERVAL:
+            last_site_check = now
+            is_available = _is_site_available(SITE_CHECK_URL)
+            if not is_available:
+                LOGGER.warning("Site unavailable: %s", SITE_CHECK_URL)
+                if last_site_available is not False:
+                    try:
+                        _send_telegram_message(config.telegram, SITE_DOWN_MESSAGE)
+                    except Exception:
+                        LOGGER.exception("Failed to send site availability alert")
+            elif last_site_available is False:
+                LOGGER.info("Site available again: %s", SITE_CHECK_URL)
+                try:
+                    _send_telegram_message(config.telegram, SITE_UP_MESSAGE)
+                except Exception:
+                    LOGGER.exception("Failed to send site recovery alert")
+            last_site_available = is_available
         time.sleep(config.poll_interval)
 
 
