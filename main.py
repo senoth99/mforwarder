@@ -101,7 +101,7 @@ def _extract_text_payload(message) -> str:
     return payload.decode(message.get_content_charset() or "utf-8", errors="replace")
 
 
-def _build_summary(message_bytes: bytes) -> str:
+def _build_summary(message_bytes: bytes, forwarded_from: str) -> str:
     message = message_from_bytes(message_bytes)
     subject = _decode_header_value(message.get("Subject"))
     from_header = _decode_header_value(message.get("From"))
@@ -111,6 +111,7 @@ def _build_summary(message_bytes: bytes) -> str:
 
     summary_lines = [
         "📬 New message",
+        f"Forwarded from: {forwarded_from}",
         f"From: {from_header}",
         f"Date: {date_header}",
         f"Subject: {subject}",
@@ -134,15 +135,15 @@ def _is_site_available(url: str, timeout: int = 10) -> bool:
     request = urllib.request.Request(url, method="HEAD")
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            return response.status < 500
+            return response.status < 400
     except urllib.error.HTTPError as exc:
         if exc.code == 405:
             try:
                 with urllib.request.urlopen(url, timeout=timeout) as response:
-                    return response.status < 500
+                    return response.status < 400
             except Exception:
                 return False
-        return True
+        return False
     except Exception:
         return False
 
@@ -180,7 +181,7 @@ def mark_seen(config: MailboxConfig, message_uid: str) -> None:
 def process_mailbox(config: MailboxConfig, telegram: TelegramConfig) -> int:
     count = 0
     for uid, message_bytes in fetch_unseen_messages(config):
-        summary = _build_summary(message_bytes)
+        summary = _build_summary(message_bytes, config.username)
         _send_telegram_message(telegram, summary)
         mark_seen(config, uid)
         count += 1
