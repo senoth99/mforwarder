@@ -6,7 +6,7 @@ import ssl
 from dataclasses import dataclass
 from email import message_from_bytes
 from email.header import decode_header
-from email.utils import parseaddr
+from email.utils import getaddresses, parseaddr
 from typing import Iterable
 import urllib.request
 import urllib.parse
@@ -107,19 +107,29 @@ def _extract_sender_email(from_header: str) -> str:
     return address
 
 
+def _extract_recipient_email(to_header: str) -> str:
+    addresses = getaddresses([to_header])
+    if not addresses:
+        return ""
+    _, address = addresses[0]
+    return address
+
+
 def _build_summary(message_bytes: bytes, mailbox_username: str) -> str:
     message = message_from_bytes(message_bytes)
     subject = _decode_header_value(message.get("Subject"))
     from_header = _decode_header_value(message.get("From"))
+    to_header = _decode_header_value(message.get("To"))
     date_header = _decode_header_value(message.get("Date"))
     body = _extract_text_payload(message)
     body_preview = "\n".join(body.strip().splitlines()[:12])
-    forwarded_from = _extract_sender_email(from_header) or mailbox_username
+    forwarded_from = _extract_recipient_email(to_header) or mailbox_username
 
     summary_lines = [
         "📬 New message",
         f"Forwarded from: {forwarded_from}",
         f"From: {from_header}",
+        f"To: {to_header}",
         f"Date: {date_header}",
         f"Subject: {subject}",
     ]
