@@ -129,7 +129,6 @@ def _build_summary(message_bytes: bytes, mailbox_username: str) -> str:
         "📬 New message",
         f"Forwarded from: {forwarded_from}",
         f"From: {from_header}",
-        f"To: {to_header}",
         f"Date: {date_header}",
         f"Subject: {subject}",
     ]
