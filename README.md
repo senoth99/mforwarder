@@ -12,6 +12,8 @@
 - `IMAP_USE_SSL` — использовать SSL (по умолчанию `true`).
 - `TELEGRAM_BOT_TOKEN` — токен бота.
 - `TELEGRAM_CHAT_ID` — ID чата, куда слать сообщения.
+- `DUPLICATE_FROM_EMAIL` — если поле `Forwarded from` совпадет с этим email, сообщение продублируется в личку.
+- `TELEGRAM_DUPLICATE_CHAT_ID` — ID личного Telegram-чата для дублирования (используется только вместе с `DUPLICATE_FROM_EMAIL`).
 - `POLL_INTERVAL` — интервал проверки в секундах (по умолчанию 60).
 - `LOG_LEVEL` — уровень логов (например, `INFO`).
 
@@ -27,6 +29,10 @@ export IMAP_USE_SSL="true"
 
 export TELEGRAM_BOT_TOKEN="123456:ABCDEF"
 export TELEGRAM_CHAT_ID="123456789"
+
+# опционально: дублировать письма конкретного alias/email в личку
+export DUPLICATE_FROM_EMAIL="forwarded-alias@example.com"
+export TELEGRAM_DUPLICATE_CHAT_ID="987654321"
 
 python main.py
 ```

@@ -31,6 +31,8 @@ class MailboxConfig:
 class TelegramConfig:
     bot_token: str
     chat_id: str
+    duplicate_from_email: str | None = None
+    duplicate_chat_id: str | None = None
 
 
 @dataclass
@@ -56,6 +58,13 @@ def load_config() -> AppConfig:
     imap_password = _require_env("IMAP_PASSWORD")
     telegram_token = _require_env("TELEGRAM_BOT_TOKEN")
     telegram_chat_id = _require_env("TELEGRAM_CHAT_ID")
+    duplicate_from_email = os.getenv("DUPLICATE_FROM_EMAIL")
+    duplicate_chat_id = os.getenv("TELEGRAM_DUPLICATE_CHAT_ID")
+
+    if bool(duplicate_from_email) != bool(duplicate_chat_id):
+        raise RuntimeError(
+            "DUPLICATE_FROM_EMAIL and TELEGRAM_DUPLICATE_CHAT_ID must be set together"
+        )
     poll_interval = int(os.getenv("POLL_INTERVAL", "60"))
 
     return AppConfig(
@@ -67,7 +76,14 @@ def load_config() -> AppConfig:
             mailbox=os.getenv("IMAP_MAILBOX", "INBOX"),
             use_ssl=os.getenv("IMAP_USE_SSL", "true").lower() != "false",
         ),
-        telegram=TelegramConfig(bot_token=telegram_token, chat_id=telegram_chat_id),
+        telegram=TelegramConfig(
+            bot_token=telegram_token,
+            chat_id=telegram_chat_id,
+            duplicate_from_email=duplicate_from_email.lower()
+            if duplicate_from_email
+            else None,
+            duplicate_chat_id=duplicate_chat_id,
+        ),
         poll_interval=poll_interval,
     )
 
@@ -234,7 +250,13 @@ def _extract_recipient_email(to_header: str) -> str:
     return address
 
 
-def _build_summary(message_bytes: bytes, mailbox_username: str) -> str:
+def _should_duplicate_message(telegram: TelegramConfig, forwarded_from: str) -> bool:
+    if not telegram.duplicate_from_email or not telegram.duplicate_chat_id:
+        return False
+    return forwarded_from.lower() == telegram.duplicate_from_email
+
+
+def _build_summary(message_bytes: bytes, mailbox_username: str) -> tuple[str, str]:
     message = message_from_bytes(message_bytes)
     subject = html.escape(_decode_header_value(message.get("Subject")))
     from_header = html.escape(_decode_header_value(message.get("From")))
@@ -259,13 +281,17 @@ def _build_summary(message_bytes: bytes, mailbox_username: str) -> str:
     if body_preview:
         summary_lines.append("")
         summary_lines.append(body_preview)
-    return "\n".join(summary_lines)
+    return "\n".join(summary_lines), forwarded_from
 
 
 def _send_telegram_message(telegram: TelegramConfig, text: str) -> None:
+    _send_telegram_message_to_chat(telegram, telegram.chat_id, text)
+
+
+def _send_telegram_message_to_chat(telegram: TelegramConfig, chat_id: str, text: str) -> None:
     url = f"https://api.telegram.org/bot{telegram.bot_token}/sendMessage"
     payload = urllib.parse.urlencode(
-        {"chat_id": telegram.chat_id, "text": text, "parse_mode": "HTML"}
+        {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
     ).encode("utf-8")
     request = urllib.request.Request(url, data=payload, method="POST")
     with urllib.request.urlopen(request, timeout=20) as response:
@@ -333,8 +359,10 @@ def mark_seen(config: MailboxConfig, message_uid: str) -> None:
 def process_mailbox(config: MailboxConfig, telegram: TelegramConfig) -> int:
     count = 0
     for uid, message_bytes in fetch_unseen_messages(config):
-        summary = _build_summary(message_bytes, config.username)
+        summary, forwarded_from = _build_summary(message_bytes, config.username)
         _send_telegram_message(telegram, summary)
+        if _should_duplicate_message(telegram, forwarded_from):
+            _send_telegram_message_to_chat(telegram, telegram.duplicate_chat_id, summary)
         message = message_from_bytes(message_bytes)
         attachments = _extract_attachments(message)
         for filename, content_type, data in attachments:
